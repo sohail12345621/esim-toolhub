@@ -190,6 +190,16 @@ class ToolHub:
             outcomes.append((plan, result))
         return outcomes
 
+    def plan_uninstall(
+        self,
+        tool_name: str,
+        *,
+        preferred_method: str | None = None,
+    ) -> InstallPlan:
+        installer = self._require_installer()
+        spec = self.registry.tool(tool_name)
+        return installer.plan_uninstall(spec, preferred_method=preferred_method)
+
     def uninstall(
         self,
         tool_name: str,
@@ -203,6 +213,26 @@ class ToolHub:
         if not dry_run:
             self._report_cache.pop(spec.name, None)
         return plan, result
+
+    def set_tool_path(self, tool_name: str, directory: Path, *, dry_run: bool = False) -> Path:
+        spec = self.registry.tool(tool_name)
+        resolved = directory.expanduser().resolve()
+        if not resolved.is_dir():
+            from esim_toolhub.core.exceptions import ConfigError
+
+            raise ConfigError(f"Directory does not exist: {resolved}")
+        if not dry_run:
+            self.environment.register(spec.name, resolved)
+            self._report_cache.pop(spec.name, None)
+        return resolved
+
+    def unset_tool_path(self, tool_name: str, *, dry_run: bool = False) -> bool:
+        spec = self.registry.tool(tool_name)
+        if dry_run:
+            return bool(self.environment.managed_dirs(spec.name))
+        removed = self.environment.unregister(spec.name)
+        self._report_cache.pop(spec.name, None)
+        return removed
 
     # ------------------------------------------------------------------ updates
     def check_updates(

@@ -123,3 +123,12 @@ def test_update_checker_online_queries_package_manager(
     assert info.state is UpdateState.UPDATE_AVAILABLE
     assert info.source == "apt"
     assert info.latest == "5.28"
+
+
+def test_query_available_version_supports_choco() -> None:
+    from esim_toolhub.core.models import InstallMethod, MethodType
+    from esim_toolhub.installers.package_managers import query_available_version
+
+    runner = FakeRunner(lambda argv: CommandResult(argv, 0, "ngspice|47.0.0\n"))
+    ver = query_available_version(runner, InstallMethod(type=MethodType.CHOCO, package="ngspice"))
+    assert str(ver) == "47.0"

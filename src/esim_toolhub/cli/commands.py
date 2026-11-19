@@ -10,7 +10,6 @@ from rich.console import Console
 
 from esim_toolhub import __version__
 from esim_toolhub.cli import formatter
-from esim_toolhub.core.exceptions import ToolHubError
 from esim_toolhub.core.manager import ToolHub
 
 app = typer.Typer(
@@ -263,20 +262,18 @@ def uninstall(
 ) -> None:
     """Uninstall a ToolHub-managed or package-manager tool."""
     hub = get_hub()
-    installer = hub._require_installer()
-    spec = hub.registry.tool(tool)
-    plan = installer.plan_uninstall(spec)
+    plan = hub.plan_uninstall(tool)
     formatter.print_plan(_console, plan, hub.system, dry_run=dry_run)
     if dry_run or not plan.executable:
         if plan.blocked_reason and not dry_run:
             raise typer.Exit(1)
         return
     if not yes and not typer.confirm(
-        f"Proceed with uninstalling {spec.display_name}?", default=False
+        f"Proceed with uninstalling {plan.tool.display_name}?", default=False
     ):
         _console.print("Cancelled.")
         return
-    result = installer.execute(plan)
+    _, result = hub.execute_plans([plan])[0]
     formatter.print_install_result(_console, result)
     if not result.success:
         raise typer.Exit(1)
@@ -363,20 +360,46 @@ def config_set(
     """Update a persistent ToolHub configuration value."""
     hub = get_hub()
     if dry_run:
-        # Validate against a throwaway copy by checking via ConfigManager helper.
-        from esim_toolhub.configuration.manager import ConfigManager, _coerce
-
-        valid_keys = ConfigManager.keys()
-        if key not in valid_keys:
-            raise ToolHubError(f"Unknown config key '{key}'.")
-        coerced = _coerce(key, value)
-        candidate = hub.config_manager.load()
-        setattr(candidate, key, coerced)
-        candidate.validate()
+        coerced = hub.config_manager.validate_change(key, value)
         _console.print(f"DRY RUN: would set {key} = {coerced!r} in {hub.paths.config_file}")
         return
     updated = hub.config_manager.set(key, value)
     formatter.print_config(_console, updated, hub.paths.config_file)
+
+
+@config_app.command("set-path")
+def config_set_path(
+    tool: Annotated[str, typer.Argument(help="Tool ID from the registry.")],
+    directory: Annotated[str, typer.Argument(help="Directory containing the tool executable.")],
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Validate without saving.")] = False,
+) -> None:
+    """Register a custom executable directory for a specific tool."""
+    from pathlib import Path
+
+    hub = get_hub()
+    resolved = hub.set_tool_path(tool, Path(directory), dry_run=dry_run)
+    if dry_run:
+        _console.print(f"DRY RUN: would register {tool} -> {resolved}")
+        return
+    _console.print(f"Registered custom path for {tool}: {resolved}")
+
+
+@config_app.command("unset-path")
+def config_unset_path(
+    tool: Annotated[str, typer.Argument(help="Tool ID to unregister.")],
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Preview without saving.")] = False,
+) -> None:
+    """Remove a custom/managed executable directory for a specific tool."""
+    hub = get_hub()
+    existed = hub.unset_tool_path(tool, dry_run=dry_run)
+    if dry_run:
+        msg = f"would remove registered path for {tool}" if existed else f"no path set for {tool}"
+        _console.print(f"DRY RUN: {msg}")
+        return
+    if existed:
+        _console.print(f"Removed registered path for {tool}.")
+    else:
+        _console.print(f"No registered path found for {tool}.")
 
 
 @config_app.command("reset")

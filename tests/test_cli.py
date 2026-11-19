@@ -122,3 +122,43 @@ def test_cli_unknown_tool_raises_toolhub_error(patched_hub: ToolHub) -> None:
     res = cli_runner.invoke(commands.app, ["check", "does-not-exist"])
     assert res.exit_code != 0
     assert isinstance(res.exception, UnknownToolError)
+
+
+def test_cli_config_set_and_unset_tool_path(patched_hub: ToolHub, tmp_path: Path) -> None:
+    custom_dir = tmp_path / "custom_ngspice_bin"
+    custom_dir.mkdir()
+
+    dry = cli_runner.invoke(
+        commands.app, ["config", "set-path", "ngspice", str(custom_dir), "--dry-run"]
+    )
+    assert dry.exit_code == 0
+    assert "DRY RUN" in dry.output
+    assert patched_hub.environment.managed_dirs("ngspice") == []
+
+    real = cli_runner.invoke(commands.app, ["config", "set-path", "ngspice", str(custom_dir)])
+    assert real.exit_code == 0
+    assert patched_hub.environment.managed_dirs("ngspice") == [custom_dir.resolve()]
+
+    unset = cli_runner.invoke(commands.app, ["config", "unset-path", "ngspice"])
+    assert unset.exit_code == 0
+    assert patched_hub.environment.managed_dirs("ngspice") == []
+
+
+def test_main_entry_handles_toolhub_error_without_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from esim_toolhub import main
+
+    def boom() -> None:
+        raise UnknownToolError("Unknown tool 'foo'")
+
+    monkeypatch.setattr(commands, "app", boom)
+    monkeypatch.setattr(commands, "_debug_mode", False)
+    with pytest.raises(SystemExit) as exc_info:
+        main.run()
+    assert exc_info.value.code == 1
+    assert "Unknown tool 'foo'" in capsys.readouterr().err
+
+    monkeypatch.setattr(commands, "_debug_mode", True)
+    with pytest.raises(UnknownToolError):
+        main.run()

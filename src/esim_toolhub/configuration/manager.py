@@ -111,11 +111,20 @@ class ConfigManager:
             if os.path.exists(tmp):
                 os.unlink(tmp)
 
-    def set(self, key: str, raw: str) -> ToolHubConfig:
+    def validate_change(self, key: str, raw: str) -> Any:
+        """Validate a proposed key/value change without persisting it."""
         if key not in _FIELD_TYPES:
             raise ConfigError(f"Unknown config key '{key}'. Valid keys: {', '.join(_FIELD_TYPES)}")
+        coerced = _coerce(key, raw)
+        candidate = self.load()
+        setattr(candidate, key, coerced)
+        candidate.validate()
+        return coerced
+
+    def set(self, key: str, raw: str) -> ToolHubConfig:
+        coerced = self.validate_change(key, raw)
         config = self.load()
-        setattr(config, key, _coerce(key, raw))
+        setattr(config, key, coerced)
         self.save(config)
         log.info("Config updated", extra={"event": "config_set", "key": key})
         return config

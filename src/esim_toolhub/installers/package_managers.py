@@ -116,6 +116,17 @@ def query_available_version(
             timeout=timeout,
         )
         return extract_version(res.stdout, _WINGET_VERSION.pattern) if res.ok else None
+    if method.type is MethodType.CHOCO:
+        res = runner.run(
+            ["choco", "search", pkg, "--exact", "--limit-output"],
+            timeout=timeout,
+        )
+        if res.ok:
+            for line in res.stdout.splitlines():
+                name, sep, ver = line.partition("|")
+                if sep and name.strip().lower() == pkg.lower():
+                    return extract_version(ver)
+        return None
     if method.type is MethodType.BREW:
         args = ["brew", "info", "--cask", pkg] if method.cask else ["brew", "info", pkg]
         res = runner.run(args, timeout=timeout)

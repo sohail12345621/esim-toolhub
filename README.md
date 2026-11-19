@@ -135,7 +135,7 @@ esim-toolhub install --profile analog --dry-run
 esim-toolhub install-profile digital --dry-run
 esim-toolhub uninstall <tool> [--dry-run] [--yes]
 esim-toolhub update [tool] [--check-only] [--dry-run] [--online] [--yes]
-esim-toolhub config [show | set <key> <value> [--dry-run] | reset | env | path]
+esim-toolhub config [show | set <key> <value> [--dry-run] | set-path <tool> <dir> | unset-path <tool> | reset | env | path]
 esim-toolhub logs [--tail 50] [--level INFO] [--path]
 esim-toolhub demo
 ```
