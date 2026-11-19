@@ -1,0 +1,276 @@
+# eSim ToolHub tool registry.
+#
+# Every tool ToolHub knows about is described here. Python code never hard-codes
+# tool names, package ids, versions or URLs. To add a tool, add an entry below and
+# (only if the tool has a quirk) a small adapter in src/esim_toolhub/tools/.
+#
+# Version facts were checked on 2026-11-19 against:
+#   - FOSSEE/eSim master: Ubuntu/install-eSim.sh, nghdl/install-nghdl.sh
+#     (KiCad >= 7, tested with 8/9; Verilator 5; GHDL must use llvm/gcc backend)
+#   - winget: KiCad.KiCad 10.0.8, ghdl.ghdl.ucrt64.mcode 6.0.0,
+#             OpenModelica.OpenModelica.Official 1.26.3 (no ngspice/verilator)
+#   - chocolatey: ngspice 47.0.0, kicad 10.0.8 (no ghdl/verilator)
+#   - GitHub release API: ghdl/ghdl v6.0.0 asset SHA256 digests
+#
+# Search paths support ${ENV_VAR}, ~ and glob patterns. Globs are tried newest-first.
+
+schema_version: 1
+updated: "2026-11-19"
+
+tools:
+  ngspice:
+    display_name: Ngspice
+    description: SPICE circuit simulator; the simulation engine behind every eSim analysis.
+    esim_role: Runs the netlists produced by eSim's KiCad-to-Ngspice converter.
+    category: analog
+    required: true
+    adapter: ngspice
+    homepage: https://ngspice.sourceforge.io/
+    executables:
+      windows: [ngspice_con.exe, ngspice.exe]
+      linux: [ngspice]
+      macos: [ngspice]
+    version_args: ["--version"]
+    version_pattern: 'ngspice-(\d+(?:\.\d+)*)'
+    minimum_version: "36"
+    latest_known_version: "47"
+    search_paths:
+      windows:
+        - C:/Spice64/bin
+        - ${ProgramData}/chocolatey/bin
+        - ${ProgramData}/chocolatey/lib/ngspice/tools/*/bin
+      linux: [/usr/bin, /usr/local/bin]
+      macos: [/opt/homebrew/bin, /usr/local/bin]
+    install:
+      windows:
+        - type: choco
+          package: ngspice
+          requires_admin: true
+        - type: manual
+          instructions:
+            - Download the 64-bit Windows build (ngspice-<ver>_64.7z) from https://ngspice.sourceforge.io/download.html
+            - Extract it so that C:\Spice64\bin\ngspice_con.exe exists
+            - Re-run 'esim-toolhub status' (C:\Spice64\bin is searched automatically)
+          notes: The official Windows build is a .7z archive, which ToolHub cannot extract with the Python standard library.
+      linux:
+        - type: apt
+          package: ngspice
+        - type: dnf
+          package: ngspice
+        - type: pacman
+          package: ngspice
+      macos:
+        - type: brew
+          package: ngspice
+
+  kicad:
+    display_name: KiCad
+    description: Schematic capture and PCB layout suite used as eSim's design front-end.
+    esim_role: Eeschema draws schematics; Pcbnew lays out boards with eSim's footprint libraries.
+    category: analog
+    required: true
+    adapter: kicad
+    homepage: https://www.kicad.org/
+    executables:
+      windows: [kicad-cli.exe]
+      linux: [kicad-cli]
+      macos: [kicad-cli]
+    version_args: ["--version"]
+    version_pattern: '(\d+\.\d+(?:\.\d+)?)'
+    minimum_version: "7.0"
+    tested_up_to: "9"
+    latest_known_version: "10.0.8"
+    search_paths:
+      windows:
+        - ${ProgramFiles}/KiCad/*/bin
+        - ${LOCALAPPDATA}/Programs/KiCad/*/bin
+      linux: [/usr/bin, /usr/local/bin]
+      macos: [/Applications/KiCad/KiCad.app/Contents/MacOS]
+    install:
+      windows:
+        - type: winget
+          package: KiCad.KiCad
+        - type: choco
+          package: kicad
+          requires_admin: true
+        - type: manual
+          instructions:
+            - Download the installer from https://www.kicad.org/download/windows/
+      linux:
+        - type: apt
+          package: kicad
+          notes: >-
+            Distribution repositories may ship an older KiCad. eSim's own installer uses
+            ppa:kicad/kicad-9.0-releases on Ubuntu; ToolHub never adds PPAs automatically.
+        - type: dnf
+          package: kicad
+        - type: pacman
+          package: kicad
+      macos:
+        - type: brew
+          package: kicad
+          cask: true
+
+  ghdl:
+    display_name: GHDL
+    description: VHDL simulator used by NGHDL for mixed-signal co-simulation.
+    esim_role: NGHDL compiles VHDL models with GHDL and co-simulates them with Ngspice.
+    category: digital
+    required: false
+    homepage: https://github.com/ghdl/ghdl
+    depends_on: [ngspice]
+    executables:
+      windows: [ghdl.exe]
+      linux: [ghdl]
+      macos: [ghdl]
+    version_args: ["--version"]
+    version_pattern: 'GHDL\s+v?(\d+(?:\.\d+)*)'
+    minimum_version: "3.0"
+    latest_known_version: "6.0.0"
+    variant:
+      label: backend
+      pattern: '\b(mcode|llvm|gcc)\b[^\n]*code generator'
+      unsupported: [mcode]
+      reason: >-
+        eSim's NGHDL links its VHDL socket server with 'ghdl -e -Wl,...', which the
+        mcode backend does not support. Use an llvm or gcc build for NGHDL.
+    host_requirements:
+      - name: C toolchain
+        executables: [gcc, cc, clang]
+        platforms: [linux, macos]
+        reason: The llvm/gcc backends link elaborated designs with the system toolchain.
+    search_paths:
+      linux: [/usr/bin, /usr/local/bin]
+      windows: [C:/msys64/ucrt64/bin, C:/msys64/mingw64/bin]
+    install:
+      linux:
+        - type: apt
+          package: ghdl-llvm
+        - type: dnf
+          package: ghdl
+        - type: archive
+          version: "6.0.0"
+          url: https://github.com/ghdl/ghdl/releases/download/v6.0.0/ghdl-llvm-6.0.0-ubuntu24.04-x86_64.tar.gz
+          sha256: e0064cd3d1569e7fca27b186b0d71e80c087de90db4e466ed77dc669a574d8bc
+          size: 29083881
+          architectures: [x86_64]
+          distros: [ubuntu]
+          notes: Upstream build for Ubuntu 24.04 (llvm backend); needs the matching LLVM runtime.
+      windows:
+        - type: winget
+          package: ghdl.ghdl.ucrt64.mcode
+          notes: This winget package is the mcode backend, which NGHDL cannot use.
+        - type: archive
+          version: "6.0.0"
+          url: https://github.com/ghdl/ghdl/releases/download/v6.0.0/ghdl-mcode-6.0.0-ucrt64.zip
+          sha256: 76e160ceec35834c73ada6e4e484416d13aed4b64cbc7c74c5cca53a7ef60e41
+          size: 23713332
+          architectures: [x86_64]
+          notes: Upstream mcode build; fine for standalone VHDL, not for NGHDL.
+      macos:
+        - type: archive
+          version: "6.0.0"
+          url: https://github.com/ghdl/ghdl/releases/download/v6.0.0/ghdl-llvm-6.0.0-macos15-aarch64.tar.gz
+          sha256: 69beb5913a490b5971980bd045af6a63b6f52e861b444fa990bffac436587478
+          size: 42445801
+          architectures: [arm64]
+
+  verilator:
+    display_name: Verilator
+    description: Verilog/SystemVerilog compiler used by eSim's NgVeri / Makerchip flow.
+    esim_role: NgVeri turns Verilog into C++ models that Ngspice loads as digital blocks.
+    category: digital
+    required: false
+    homepage: https://www.veripool.org/verilator/
+    depends_on: [ngspice]
+    executables:
+      windows: [verilator_bin.exe, verilator.exe]
+      linux: [verilator]
+      macos: [verilator]
+    version_args: ["--version"]
+    version_pattern: 'Verilator\s+v?(\d+\.\d+)'
+    minimum_version: "5.0"
+    latest_known_version: null
+    host_requirements:
+      - name: C++ compiler
+        executables: [g++, clang++, c++]
+        platforms: [linux, macos]
+        reason: Verilator emits C++ that must be compiled.
+      - name: make
+        executables: [make]
+        platforms: [linux, macos]
+        reason: Verilator-generated models are built with make.
+    search_paths:
+      linux: [/usr/bin, /usr/local/bin]
+      windows: [C:/msys64/ucrt64/bin, C:/msys64/mingw64/bin]
+    install:
+      linux:
+        - type: apt
+          package: verilator
+          notes: Ubuntu 24.04+ ships Verilator 5; Ubuntu 22.04 ships Verilator 4, which is too old for eSim.
+        - type: dnf
+          package: verilator
+        - type: pacman
+          package: verilator
+      windows:
+        - type: manual
+          instructions:
+            - Install MSYS2 from https://www.msys2.org/
+            - "In the MSYS2 UCRT64 shell run: pacman -S mingw-w64-ucrt-x86_64-verilator"
+            - Alternatively use WSL (Ubuntu 24.04) and install with 'sudo apt install verilator'
+          notes: Verilator publishes no native Windows binaries and is not on winget or Chocolatey.
+      macos:
+        - type: brew
+          package: verilator
+
+  openmodelica:
+    display_name: OpenModelica
+    description: Modelica environment used by eSim's Ngspice-to-Modelica converter.
+    esim_role: Simulates Modelica models produced from Ngspice netlists.
+    category: modelica
+    required: false
+    homepage: https://openmodelica.org/
+    executables:
+      windows: [omc.exe]
+      linux: [omc]
+      macos: [omc]
+    version_args: ["--version"]
+    version_pattern: 'OpenModelica\s+v?(\d+(?:\.\d+)*)'
+    minimum_version: "1.20"
+    latest_known_version: "1.26.3"
+    search_paths:
+      windows:
+        - ${ProgramFiles}/OpenModelica*/bin
+        - C:/OpenModelica*/bin
+      linux: [/usr/bin]
+    install:
+      windows:
+        - type: winget
+          package: OpenModelica.OpenModelica.Official
+      linux:
+        - type: manual
+          instructions:
+            - Follow https://openmodelica.org/download/download-linux/ to add the OpenModelica apt repository
+            - "Then run: sudo apt install omc"
+          notes: OpenModelica is not in the default Ubuntu repositories; ToolHub does not add third-party repositories.
+      macos:
+        - type: manual
+          instructions:
+            - OpenModelica has no native macOS release; use the Docker image or a Linux VM.
+
+profiles:
+  minimal:
+    description: Simulation core - the Ngspice engine eSim cannot run without.
+    tools: [ngspice]
+  analog:
+    description: Schematic capture + analog simulation (KiCad, Ngspice).
+    extends: [minimal]
+    tools: [kicad]
+  digital:
+    description: Analog plus mixed-signal digital flows (NGHDL via GHDL, NgVeri via Verilator).
+    extends: [analog]
+    tools: [ghdl, verilator]
+  full:
+    description: Everything eSim can integrate, including OpenModelica.
+    extends: [digital]
+    tools: [openmodelica]

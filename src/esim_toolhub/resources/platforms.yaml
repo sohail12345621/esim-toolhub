@@ -1,0 +1,37 @@
+# Platform support matrix and download trust policy.
+
+python:
+  minimum: "3.10"
+
+platforms:
+  windows:
+    display_name: Windows
+    supported: true
+    status: supported
+    architectures: [x86_64, arm64]
+    package_managers: [winget, choco]
+    notes: Windows 10/11. winget runs per-user; Chocolatey needs an elevated terminal.
+  linux:
+    display_name: Linux
+    supported: true
+    status: supported
+    architectures: [x86_64, arm64]
+    package_managers: [apt, dnf, pacman]
+    notes: eSim itself targets Ubuntu 24.04 / 26.04 LTS. Package installs use sudo.
+  macos:
+    display_name: macOS
+    supported: false
+    status: experimental
+    architectures: [x86_64, arm64]
+    package_managers: [brew]
+    notes: Detection works; Homebrew installer is implemented but not validated on hardware. eSim does not officially support macOS.
+
+# Downloads (archive method) are only accepted over HTTPS from these exact hosts,
+# including every redirect hop.
+trusted_hosts:
+  - github.com
+  - objects.githubusercontent.com
+  - release-assets.githubusercontent.com
+  - downloads.kicad.org
+  - downloads.sourceforge.net
+  - esim.fossee.in
